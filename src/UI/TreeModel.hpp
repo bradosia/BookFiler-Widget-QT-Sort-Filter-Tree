@@ -31,7 +31,6 @@
 
 // Local Project
 #include "TreeItem.hpp"
-#include "TreeItemDelegate.hpp"
 
 /*
  * bookfiler - widget
@@ -98,9 +97,6 @@ public:
   Qt::ItemFlags flags(const QModelIndex &index) const override;
   bool setData(const QModelIndex &index, const QVariant &value,
                int role = Qt::EditRole) override;
-
-private:
-  TreeItem *rootItem;
 };
 
 } // namespace widget

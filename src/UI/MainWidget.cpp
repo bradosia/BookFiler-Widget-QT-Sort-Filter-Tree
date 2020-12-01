@@ -23,15 +23,17 @@ TreeImpl::~TreeImpl(){};
 int TreeImpl::setData(std::shared_ptr<sqlite3> database_,
                       std::string tableName_, std::string idColumn_,
                       std::string parentColumn_) {
-  treeModel = std::make_shared<TreeModel>();
-  treeModel->setData(database_, tableName_, idColumn_, parentColumn_);
-  this->setModel(treeModel.get());
+  treeModelPtr = std::make_shared<TreeModel>();
+  treeModelPtr->setData(database_, tableName_, idColumn_, parentColumn_);
+  // Does not take ownership, unless the view is the model's parent
+  setModel(treeModelPtr.get());
+  treeItemDelegatePtr = std::make_shared<TreeItemDelegate>();
+  // Does not take ownership
+  setItemDelegate(treeItemDelegatePtr.get());
   return 0;
 }
 
-int TreeImpl::setRoot(std::string id) {
-  return treeModel->setRoot(id);
-}
+int TreeImpl::setRoot(std::string id) { return treeModelPtr->setRoot(id); }
 int TreeImpl::update() { return 0; }
 int TreeImpl::updateIdHint(std::vector<std::string> addedIdList,
                            std::vector<std::string> updatedIdList,

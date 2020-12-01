@@ -44,6 +44,7 @@
 #include <QWidget>
 
 // Local Project
+#include "TreeItemDelegate.hpp"
 #include "TreeModel.hpp"
 
 /*
@@ -55,7 +56,8 @@ namespace widget {
 class TreeImpl : public QTreeView {
   Q_OBJECT
 private:
-  std::shared_ptr<TreeModel> treeModel;
+  std::shared_ptr<TreeModel> treeModelPtr;
+  std::shared_ptr<TreeItemDelegate> treeItemDelegatePtr;
   boost::signals2::signal<void(std::vector<std::string>,
                                std::vector<std::string>,
                                std::vector<std::string>)>
@@ -84,11 +86,14 @@ public:
   /* Called when the sqlite3 database is updated by another widget, thread, or
    * process. Need to rebuild the entire internal representation of the tree
    * because no hint at which rows were added, updated, or deleted is provided.
+   * Internally update(const QModelIndex &index) is called to update the root
+   * index and all child indexes
    * @return 0 on success, else error code
    */
   int update();
   /* Called when the sqlite3 database is updated by another widget, thread, or
-   * process.
+   * process. Internally, this method will need to ask the model for the list of
+   * QModelIndex that need to be updated.
    * @param addedIdList a list of id that were added. Only the
    * row id provided was added, not the children, unless the child id is
    * also listed
