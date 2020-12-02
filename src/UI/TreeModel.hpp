@@ -30,7 +30,7 @@
 #include <QVariant>
 
 // Local Project
-#include "../core/TreeIModelIndex.hpp"
+#include "../core/TreeModelIndex.hpp"
 
 /*
  * bookfiler - widget

@@ -39,7 +39,7 @@ link_directories(
 
 # Set up source files
 set(SOURCES
-    src/core/TreeIModelIndex.cpp
+    src/core/TreeModelIndex.cpp
 
     src/UI/TreeView.cpp
     src/UI/TreeItemDelegate.cpp
@@ -50,7 +50,7 @@ set(SOURCES
 set(HEADERS
     src/core/config.hpp
 
-    src/core/TreeIModelIndex.hpp
+    src/core/TreeModelIndex.hpp
 
     src/UI/TreeView.hpp
     src/UI/TreeItemDelegate.hpp
