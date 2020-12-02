@@ -40,12 +40,6 @@ int main(int argc, char *argv[]) {
   QApplication qtApp(argc, argv);
   QMainWindow qtMainWindow;
 
-  // create widget
-  std::shared_ptr<bookfiler::widget::TreeImpl> treeWidget =
-      std::make_shared<bookfiler::widget::TreeImpl>();
-  qtMainWindow.setCentralWidget(treeWidget.get());
-  qtMainWindow.show();
-
   // create a test database
   sqlite3 *dbPtr = nullptr;
   int rc = sqlite3_open(":memory:", &dbPtr);
@@ -63,9 +57,21 @@ int main(int argc, char *argv[]) {
     return rc;
   }
 
-  treeWidget->setData(database, "testTable", "guid", "parent_guid");
-  treeWidget->setRoot("*");
-  treeWidget->update();
+  // Create View and Model
+  std::shared_ptr<bookfiler::widget::TreeView> treeViewPtr =
+      std::make_shared<bookfiler::widget::TreeView>();
+  std::shared_ptr<bookfiler::widget::TreeModel> treeModelPtr =
+      std::make_shared<bookfiler::widget::TreeModel>();
+  qtMainWindow.setCentralWidget(treeViewPtr.get());
+  qtMainWindow.show();
+
+  // Setup Model
+  treeModelPtr->setData(database, "testTable", "guid", "parent_guid");
+  treeModelPtr->setRoot("*");
+
+  // Setup View
+  treeViewPtr->setModel(treeModelPtr.get());
+  treeViewPtr->update();
 
   // Start the application loop
   qtApp.exec();

@@ -41,8 +41,7 @@ link_directories(
 set(SOURCES
     src/core/TreeIModelIndex.cpp
 
-    src/UI/MainWidget.cpp
-    src/UI/TreeItem.cpp
+    src/UI/TreeView.cpp
     src/UI/TreeItemDelegate.cpp
     src/UI/TreeItemEditor.cpp
     src/UI/TreeModel.cpp
@@ -53,8 +52,7 @@ set(HEADERS
 
     src/core/TreeIModelIndex.hpp
 
-    src/UI/MainWidget.hpp
-    src/UI/TreeItem.hpp
+    src/UI/TreeView.hpp
     src/UI/TreeItemDelegate.hpp
     src/UI/TreeItemEditor.hpp
     src/UI/TreeModel.hpp

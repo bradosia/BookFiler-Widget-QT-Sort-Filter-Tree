@@ -30,7 +30,7 @@ namespace widget {
 
 TreeModel::TreeModel(QObject *parent) : QAbstractItemModel(parent) {}
 
-TreeModel::~TreeModel() { delete rootItem; }
+TreeModel::~TreeModel() {}
 
 /* Custom methods
  *
@@ -88,6 +88,19 @@ int TreeModel::setData(std::shared_ptr<sqlite3> database_,
 
 int TreeModel::setRoot(std::string id) {
   viewRootId = id;
+  return 0;
+}
+
+int TreeModel::updateIdHint(std::vector<std::string> addedIdList,
+                            std::vector<std::string> updatedIdList,
+                            std::vector<std::string> deletedIdList) {
+  return 0;
+}
+int TreeModel::connectUpdateIdHint(
+    std::function<void(std::vector<std::string>, std::vector<std::string>,
+                       std::vector<std::string>)>
+        slot) {
+  updateSignal.connect(slot);
   return 0;
 }
 
@@ -357,8 +370,6 @@ bool TreeModel::setData(const QModelIndex &index, const QVariant &value,
   if (role) {
     // TODO
   }
-  TreeItem *item = static_cast<TreeItem *>(index.internalPointer());
-  item->setData(index.column(), value);
   return true;
 }
 
@@ -367,8 +378,7 @@ Qt::DropActions TreeModel::supportedDropActions() const {
 }
 
 bool TreeModel::removeRows(int row, int count, const QModelIndex &parent) {
-  TreeItem *parentItem = static_cast<TreeItem *>(parent.internalPointer());
-  parentItem->removeChild(row, count);
+  // TODO
   return true;
 }
 

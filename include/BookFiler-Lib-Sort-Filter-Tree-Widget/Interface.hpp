@@ -10,7 +10,7 @@
 #define BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_INTERFACE_H
 
 // local project
-#include "../src/UI/MainWidget.hpp"
+#include "../src/UI/TreeView.hpp"
 
 /*
  * bookfiler - widget
