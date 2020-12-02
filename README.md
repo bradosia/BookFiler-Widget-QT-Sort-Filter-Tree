@@ -6,7 +6,7 @@ This is a QT5 widget that creates a `QTreeView` with sorting and filtering funct
 Connect to your database:
 ```cpp
 sqlite3 *dbPtr = nullptr;
-sqlite3_open("myDatabase.db", &dbPtr);
+sqlite3_open(":memory:", &dbPtr);
 // Using shared pointers when possible
 std::shared_ptr<sqlite3> database(nullptr);
 database.reset(dbPtr, sqlite3_close);
@@ -14,30 +14,32 @@ database.reset(dbPtr, sqlite3_close);
 
 Create the tree widget and set the database data
 ```cpp
-std::shared_ptr<bookfiler::widget::TreeImpl> treeWidget =
-      std::make_shared<bookfiler::widget::TreeImpl>();
-treeWidget->setData(database, "testTable", "guid", "parent_guid");
-treeWidget->setRoot("*"); 
-treeWidget->update();
+  // Create View and Model
+  std::shared_ptr<bookfiler::widget::TreeView> treeViewPtr =
+      std::make_shared<bookfiler::widget::TreeView>();
+  std::shared_ptr<bookfiler::widget::TreeModel> treeModelPtr =
+      std::make_shared<bookfiler::widget::TreeModel>();
+  qtMainWindow.setCentralWidget(treeViewPtr.get());
+  qtMainWindow.show();
+
+  // Setup Model
+  treeModelPtr->setData(database, "testTable", "guid", "parent_guid");
+  treeModelPtr->setRoot("*");
+
+  // Setup View
+  treeViewPtr->setModel(treeModelPtr.get());
+  treeViewPtr->update();
 ```
 
 ## Table format
 
 This widget will work with any sqlite3 table as long as there is a `guid` and `parent_guid` column. The  `guid` is a unique id for the row and the `parent_guid` will be the parent id that the row will be a child of.
 
-## Examples 
-
-### Style 1
+## Example
 
 columns: guid, parent_guid, Subject, Important, Attachment, From, Date, Size
 
 ![Style 1](https://github.com/bradosia/BookFiler-Lib-Sort-Filter-Tree-Widget/blob/main/dev/tree-view-design-1.png?raw=true)
-
-### Style 2
-
-columns: guid, parent_guid, Name
-
-![Style 2](https://github.com/bradosia/BookFiler-Lib-Sort-Filter-Tree-Widget/blob/main/dev/tree-view-design-2.png?raw=true)
 
 # Build Instructions
 
