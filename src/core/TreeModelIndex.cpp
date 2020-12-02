@@ -14,7 +14,7 @@
 #include <iostream>
 
 // Local Project
-#include "TreeIModelIndex.hpp"
+#include "TreeModelIndex.hpp"
 
 /*
  * bookfiler - widget
