@@ -21,43 +21,38 @@ The Tree Model is similar to `QSqlTableModel`, except it is specialized to use `
 
 The header file written for the `TreeModel` documents how the methods should work: [/src/UI/TreeModel.hpp](/src/UI/TreeModel.hpp)
 
-There 
+There is already a partial implementation for the tree model to give an example of how the column names are pulled out of a `sqlite3` database table. Database query results need to somehow be cached in the model. One design idea may be to cache queries in a custom table index that will be used with the `QModelIndex`. A mostly empty file for this is at [/src/core/TreeIModelIndex.hpp](/src/core/TreeIModelIndex.hpp).
 
 ## Sorting and Filtering Implementation
 
-I already wrote the header file for how each method on the derived `QTreeView` should be used [/src/UI/MainWidget.hpp](https://github.com/bradosia/BookFiler-Lib-Sort-Filter-Tree-Widget/blob/main/src/UI/MainWidget.hpp). You must finish implementing the widget using the source files provided in this repository. The example program is used to test the widget. [/src_example/example00/main.cpp](https://github.com/bradosia/BookFiler-Lib-Sort-Filter-Tree-Widget/blob/main/src_example/example00/main.cpp).
+Most of the time, in memory `sqlite3` databases will be used so using sql queries to refetch the `sqlite3` database table should be quick. Similar to `QSqlTableModel`, the `TreeModel` also has `setSort` and `setFilter` methods, but the usage is different. See the header file [/src/UI/TreeModel.hpp](/src/UI/TreeModel.hpp) for my notes on these methods.
 
-To begin development, you should fork this repository and begin implementing the source files [/src/](https://github.com/bradosia/BookFiler-Lib-Sort-Filter-Tree-Widget/tree/main/src). Make a pull request or zip up your forked repository and send it to me when delivering work.
+## How is the tree represented in the `sqlite3` table?
+
+The `sqlite3` table must have the columns `guid` and `guid_parent` (the name of the column can be different, the columns must have the same purpose) so that the tree view children can be built off this. The `guid_parent` refers to the parent `guid` row. This relationship establishes a parent-child relationship to make a tree.
 
 # Cell selection
 
 The user should be able to select cells by clicking on them. They are able to select many cells by holding alt or shift while selecting. When copying and pasting a selection to a text pad, it should paste the tab delimited values of the copied cells.
 
-## Libraries, Compiler, and compatability
+# Libraries, Compiler, and compatability
 
 The Libraries used are QT, Boost, and sqlite3. Other libraries need to be approved before use.
 
 Program must compile on Windows and Linux. For Windows, use MinGW for compiling. For Linux use GCC. Use cmake as the build scipt. Personally, the IDE I use is QT Creator, but any should work as long as you can build with cmake.
 
-## `QTreeView` column dynamic sizing
+# Simple Usage
 
-The `QTreeView` columns must be dynamically created to be the same as the `sqlite3` table passed to the widget. You must use an SQL query to detect the columns in the table and dynamically create a view for it. 
-Example SQL query for getting column names in a table:
-```sql
-SELECT name FROM pragma_table_info('QTreeTable');
-```
-`sqlite3` table must have the columns `guid` and `guid_parent` (the name of the column can be different, the columns must have the same purpose) so that the tree view children can be built off this. 
-
-For example, I should be able to connect any database that is set up with columns `guid` and `guid_parent`:
+Here is a simple example to show how a `sqlite3` database is opened and passed to the `TreeModel`
 ```cpp
 sqlite3 *dbPtr = nullptr;
-sqlite3_open(":memory:", &dbPtr);
+sqlite3_open("data.db", &dbPtr);
 // Using shared pointers when possible
 std::shared_ptr<sqlite3> database(nullptr);
 database.reset(dbPtr, sqlite3_close);
 ```
 
-Then I should be able to create the tree widget and set the database data.
+This is a simple example to show the widget in a small program. See how the view and the model are decoupled. 
 ```cpp
   // Create View and Model
   std::shared_ptr<bookfiler::widget::TreeView> treeViewPtr =
@@ -76,6 +71,12 @@ Then I should be able to create the tree widget and set the database data.
   treeViewPtr->update();
 ```
 
+See [/src_example/example00/main.cpp](/src_example/example00/main.cpp) for the full code to test your widget after implementing it.
+
+# Collaboration
+
+To begin development, you should fork this repository and begin implementing the source files at [/src/](/src). Make a pull request or zip up your forked repository and send it to me when delivering work.
+
 ## Coding Standards
 Always use the standard library when possible. Use `std::shared_ptr` and `std::unique_ptr` instead of raw pointers whenever possible, except when creating widgets since the the QT UI will Immediately take control of the widget. use `boost` if some method does not exist in standard library. Finally use `QT5` as the last option. For example use `std::string` instead of `QString` so the code is more portable. Use `QString` only when necessary to pass to a QT function.
 
@@ -88,7 +89,7 @@ Separate all graphical GUI code into the `/src/UI/` directory. Anything with `QT
 ## Deliverables
 
 * Clean and commented code that follows the general design already provided and discussed in the readme.
-* Make the example that tests the widget work [/src_example/example00/main.cpp](https://github.com/bradosia/BookFiler-Lib-Sort-Filter-Tree-Widget/blob/main/src_example/example00/main.cpp).
+* Make the example that tests the widget work [/src_example/example00/main.cpp](/src_example/example00/main.cpp).
 * Should be able to click the header column titles to re-order
 * transaction cells are selectable and copyable as tab separated values in the clipboard.
 * Double clicking on a field will make it editable
