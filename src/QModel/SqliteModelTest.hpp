@@ -1,19 +1,20 @@
 /*
- * @name BookFiler Library - Sort Filter Tree Widget
+ * @name BookFiler Widget - Sqlite Model
  * @author Branden Lee
  * @version 1.00
  * @license MIT
- * @brief sqlite3 based tree widget.
+ * @brief QAbstractItemModel with a sqlite3 backend.
  */
 
-#ifndef BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_MODEL_H
-#define BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_MODEL_H
+#ifndef BOOKFILER_WIDGET_SQLITE_MODEL_TEST_H
+#define BOOKFILER_WIDGET_SQLITE_MODEL_TEST_H
 
 // config
 #include "../core/config.hpp"
 
 // C++
 #include <iostream>
+#include <map>
 #include <memory>
 #include <queue>
 
@@ -27,10 +28,12 @@
  */
 #include <QAbstractItemModel>
 #include <QModelIndex>
+#include <QSqlDatabase>
+#include <QSqlDriver>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QSqlTableModel>
 #include <QVariant>
-
-// Local Project
-#include "../core/TreeModelIndex.hpp"
 
 /*
  * bookfiler - widget
@@ -39,23 +42,30 @@ namespace bookfiler {
 namespace widget {
 
 /*
- * @brief Provides a simple tree model to show how to create and use
- * hierarchical models.
+ * @brief This class is just a test to be used in place of SqliteModel.
+ * SqliteModel has not been implemented yet, so a QSqlTableModel is used which
+ * has similar functionality. QSqlTableModel is not used normally because some
+ * other modules don't link to QT, so using a sqlite3 database is more portable
+ * and a smaller dependency.
  */
-class TreeModel : public QAbstractItemModel {
+class SqliteModelTest : public QSqlTableModel {
   Q_OBJECT
 private:
-  std::shared_ptr<sqlite3> database;
-  std::string tableName, idColumn, parentColumn, viewRootId;
+  std::string tableName, viewRootId;
   std::vector<QVariant> headerList;
   boost::signals2::signal<void(std::vector<std::string>,
                                std::vector<std::string>,
                                std::vector<std::string>)>
       updateSignal;
+  std::map<std::string, std::string> columnMap;
+  std::map<int, int> columnNumMap{{0, 0}, {1, 1}, {2, 2}, {3, 3},
+                                  {4, 4}, {5, 5}, {6, 6}};
 
 public:
-  TreeModel(QObject *parent = nullptr);
-  ~TreeModel();
+  SqliteModelTest(QSqlDatabase &database_, std::string tableName_,
+                  std::map<std::string, std::string> columnMap_,
+                  QObject *parent = nullptr);
+  ~SqliteModelTest();
 
   /* Sets the database to use for the model.
    * @param database mysqlite3 database that this tree widget will be synced
@@ -67,13 +77,22 @@ public:
    * for example the sql schema may be: "parent_guid" text(32)
    * @return 0 on success, else error code
    */
-  int setData(std::shared_ptr<sqlite3> database, std::string tableName,
-              std::string idColumn, std::string parentColumn);
+  int setData(QSqlDatabase &database, std::string tableName,
+              std::map<std::string, std::string> columnMap =
+                  std::map<std::string, std::string>());
 
-  /* @param id the view root. "*" to view all rows with a NULL parent
+  /* Sets the root id for the view.
+   * @param id the view root. "*" to view all rows with a NULL parent
    * @return 0 on success, else error code
    */
   int setRoot(std::string id);
+
+  /* Sets a map for column number transformation. This is used to re-order
+   * column positions
+   * @param columnNumMap The column number map
+   * @return 0 on success, else error code
+   */
+  int setColumnNumMap(std::map<int, int> columnNumMap);
 
   /* Called when the sqlite3 database is updated by another widget, thread, or
    * process. Internally, this method will need to ask the model for the list of
@@ -135,36 +154,9 @@ public:
    */
   int setFilter(std::vector<std::tuple<std::string, std::string, std::string>>
                     sortOrderList);
-
-  /* Essential QAbstractItemModel methods
-   *
-   * https://doc.qt.io/qt-5/qabstractitemmodel.html
-   * When subclassing QAbstractItemModel, at the very least you must implement
-   * index(), parent(), rowCount(), columnCount(), and data().
-   * These functions are used in all read-only models, and form the basis of
-   * editable models.
-   */
-  QModelIndex index(int row, int column,
-                    const QModelIndex &parent = QModelIndex()) const override;
-  QModelIndex parent(const QModelIndex &index) const override;
-  int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-  int columnCount(const QModelIndex &parent = QModelIndex()) const override;
-  QVariant data(const QModelIndex &index, int role) const override;
-  /* Copy and move operations methods
-   */
-  Qt::DropActions supportedDropActions() const override;
-  bool removeRows(int row, int count,
-                  const QModelIndex &parent = QModelIndex()) override;
-  /* Other QAbstractItemModel methods
-   */
-  QVariant headerData(int section, Qt::Orientation orientation,
-                      int role = Qt::DisplayRole) const override;
-  Qt::ItemFlags flags(const QModelIndex &index) const override;
-  bool setData(const QModelIndex &index, const QVariant &value,
-               int role = Qt::EditRole) override;
 };
 
 } // namespace widget
 } // namespace bookfiler
 
-#endif // BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_MODEL_H
+#endif // BOOKFILER_WIDGET_SQLITE_MODEL_TEST_H

@@ -1,18 +1,12 @@
 /*
- * @name BookFiler Library - Sort Filter Tree Widget
+ * @name BookFiler Widget - Sqlite Model
  * @author Branden Lee
  * @version 1.00
  * @license MIT
- * @brief sqlite3 based tree widget.
+ * @brief QAbstractItemModel with a sqlite3 backend.
  */
 
-/*
-   @brief Provides a simple tree model to show how to create and use
-  hierarchical models.
-
-  Examples
-  https://code.qt.io/cgit/qt/qtbase.git/tree/examples/widgets/itemviews/stardelegate/main.cpp?h=5.14
-*/
+#if DEPENDENCY_SQLITE
 
 /* QT 5.13.2
  * License: LGPLv3
@@ -20,7 +14,7 @@
 #include <QStringList>
 
 // Local Project
-#include "TreeModel.hpp"
+#include "SqliteModel.hpp"
 
 /*
  * bookfiler - widget
@@ -28,9 +22,15 @@
 namespace bookfiler {
 namespace widget {
 
-TreeModel::TreeModel(QObject *parent) : QAbstractItemModel(parent) {}
+SqliteModel::SqliteModel(std::shared_ptr<sqlite3> database_,
+                         std::string tableName_,
+                         std::map<std::string, std::string> columnMap_,
+                         QObject *parent)
+    : QAbstractItemModel(parent) {
+  setData(database_, tableName_, columnMap_);
+}
 
-TreeModel::~TreeModel() {}
+SqliteModel::~SqliteModel() {}
 
 /* Custom methods
  *
@@ -39,17 +39,19 @@ TreeModel::~TreeModel() {}
  *
  */
 
-int TreeModel::setData(std::shared_ptr<sqlite3> database_,
-                       std::string tableName_, std::string idColumn_,
-                       std::string parentColumn_) {
-  char *errMessage = 0;
+int SqliteModel::setData(std::shared_ptr<sqlite3> database_,
+                         std::string tableName_,
+                         std::map<std::string, std::string> columnMap_) {
   int rc = 0;
 
   // Set sqlite database information
   database = database_;
   tableName = tableName_;
-  idColumn = idColumn_;
-  parentColumn = parentColumn_;
+
+  // Use default column map if none provided
+  if (!columnMap_.empty()) {
+    columnMap = columnMap_;
+  }
 
   /* Get the table headers */
   std::string sqlQuery =
@@ -86,17 +88,17 @@ int TreeModel::setData(std::shared_ptr<sqlite3> database_,
   return 0;
 }
 
-int TreeModel::setRoot(std::string id) {
+int SqliteModel::setRoot(std::string id) {
   viewRootId = id;
   return 0;
 }
 
-int TreeModel::updateIdHint(std::vector<std::string> addedIdList,
-                            std::vector<std::string> updatedIdList,
-                            std::vector<std::string> deletedIdList) {
+int SqliteModel::setColumnNumMap(std::map<int, int> columnNumMap_) {
+  columnNumMap = columnNumMap_;
   return 0;
 }
-int TreeModel::connectUpdateIdHint(
+
+int SqliteModel::connectUpdateIdHint(
     std::function<void(std::vector<std::string>, std::vector<std::string>,
                        std::vector<std::string>)>
         slot) {
@@ -110,9 +112,9 @@ int TreeModel::connectUpdateIdHint(
  *
  */
 
-int TreeModel::columnCount(const QModelIndex &parent) const {
+int SqliteModel::columnCount(const QModelIndex &parent) const {
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_COLUMN_COUNT
-  std::cout << "TreeModel::columnCount row: " << parent.row()
+  std::cout << "SqliteModel::columnCount row: " << parent.row()
             << ", col: " << parent.column();
   if (parent.internalPointer()) {
     std::string parentId =
@@ -124,9 +126,9 @@ int TreeModel::columnCount(const QModelIndex &parent) const {
   return headerList.size();
 }
 
-QVariant TreeModel::data(const QModelIndex &index, int role) const {
+QVariant SqliteModel::data(const QModelIndex &index, int role) const {
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "TreeModel::data index.row: " << index.row()
+  std::cout << "SqliteModel::data index.row: " << index.row()
             << ", index.col: " << index.column();
   if (index.internalPointer()) {
     std::string indexId = *static_cast<std::string *>(index.internalPointer());
@@ -153,9 +155,9 @@ QVariant TreeModel::data(const QModelIndex &index, int role) const {
   return QVariant();
 }
 
-Qt::ItemFlags TreeModel::flags(const QModelIndex &index) const {
+Qt::ItemFlags SqliteModel::flags(const QModelIndex &index) const {
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "TreeModel::flags index.row: " << index.row()
+  std::cout << "SqliteModel::flags index.row: " << index.row()
             << ", index.col: " << index.column();
   if (index.internalPointer()) {
     std::string indexId = *static_cast<std::string *>(index.internalPointer());
@@ -170,8 +172,8 @@ Qt::ItemFlags TreeModel::flags(const QModelIndex &index) const {
          Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
 }
 
-QVariant TreeModel::headerData(int section, Qt::Orientation orientation,
-                               int role) const {
+QVariant SqliteModel::headerData(int section, Qt::Orientation orientation,
+                                 int role) const {
   if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
     return headerList.at(section);
   }
@@ -179,15 +181,14 @@ QVariant TreeModel::headerData(int section, Qt::Orientation orientation,
   return QVariant();
 }
 
-QModelIndex TreeModel::index(int row, int column,
-                             const QModelIndex &parent) const {
-  char *errMessage = 0;
+QModelIndex SqliteModel::index(int row, int column,
+                               const QModelIndex &parent) const {
   int rc = 0;
   std::string parentId;
   std::string *childId;
 
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "TreeModel::index parent.row: " << parent.row()
+  std::cout << "SqliteModel::index parent.row: " << parent.row()
             << ", parent.col: " << parent.column();
   std::cout << ", row: " << row << ", col: " << column;
   if (parent.internalPointer()) {
@@ -206,9 +207,11 @@ QModelIndex TreeModel::index(int row, int column,
     parentId = *static_cast<std::string *>(parent.internalPointer());
 
   // Get the parentID from the SELECT of the id
-  std::string sqlQuery = "SELECT `" + idColumn + "` FROM `" + tableName;
+  std::string sqlQuery =
+      "SELECT `" + columnMap.at("id") + "` FROM `" + tableName;
   if (parentId != "*") {
-    sqlQuery.append(" WHERE `" + parentColumn + "`='" + parentId + "'");
+    sqlQuery.append(" WHERE `" + columnMap.at("parentId") + "`='" + parentId +
+                    "'");
   }
   sqlQuery.append("` LIMIT " + std::to_string(row) + ",1;");
 
@@ -235,7 +238,7 @@ QModelIndex TreeModel::index(int row, int column,
   }
 
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_ROW_COUNT
-  std::cout << "TreeModel::index childId: " << *childId << std::endl;
+  std::cout << "SqliteModel::index childId: " << *childId << std::endl;
 #endif
 
   if (childId)
@@ -243,14 +246,13 @@ QModelIndex TreeModel::index(int row, int column,
   return QModelIndex();
 }
 
-QModelIndex TreeModel::parent(const QModelIndex &index) const {
-  char *errMessage = 0;
+QModelIndex SqliteModel::parent(const QModelIndex &index) const {
   int rc = 0;
   std::string *parentId = nullptr;
   std::string indexId;
 
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "TreeModel::parent row: " << index.row()
+  std::cout << "SqliteModel::parent row: " << index.row()
             << ", col: " << index.column();
   if (index.internalPointer()) {
     indexId = *static_cast<std::string *>(index.internalPointer());
@@ -263,8 +265,9 @@ QModelIndex TreeModel::parent(const QModelIndex &index) const {
     return QModelIndex();
 
   // Get the parentID from the SELECT of the id
-  std::string sqlQuery = "SELECT `" + parentColumn + "` FROM `" + tableName +
-                         "` WHERE `" + idColumn + "`='" + indexId + "';";
+  std::string sqlQuery = "SELECT `" + columnMap.at("parentId") + "` FROM `" +
+                         tableName + "` WHERE `" + columnMap.at("id") + "`='" +
+                         indexId + "';";
 
   sqlite3_stmt *stmt = nullptr;
   rc = sqlite3_prepare_v2(database.get(), sqlQuery.c_str(), -1, &stmt, nullptr);
@@ -292,7 +295,7 @@ QModelIndex TreeModel::parent(const QModelIndex &index) const {
 
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_ROW_COUNT
   if (parentId) {
-    std::cout << "TreeModel::parent parentId: " << *parentId << std::endl;
+    std::cout << "SqliteModel::parent parentId: " << *parentId << std::endl;
   }
 #endif
 
@@ -302,14 +305,13 @@ QModelIndex TreeModel::parent(const QModelIndex &index) const {
   return createIndex(0, 0, parentId);
 }
 
-int TreeModel::rowCount(const QModelIndex &parent) const {
-  char *errMessage = 0;
+int SqliteModel::rowCount(const QModelIndex &parent) const {
   int rc = 0;
   int rowCountRet = 0;
   std::string parentId;
 
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "TreeModel::rowCount parent.row: " << parent.row()
+  std::cout << "SqliteModel::rowCount parent.row: " << parent.row()
             << ", parent.col: " << parent.column();
   if (parent.internalPointer()) {
     parentId = *static_cast<std::string *>(parent.internalPointer());
@@ -327,7 +329,7 @@ int TreeModel::rowCount(const QModelIndex &parent) const {
     parentId = *static_cast<std::string *>(parent.internalPointer());
 
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_ROW_COUNT
-  std::cout << "TreeModel::rowCount isValid: "
+  std::cout << "SqliteModel::rowCount isValid: "
             << (parent.isValid() ? "true" : "false")
             << ", parentId: " << parentId << std::endl;
 #endif
@@ -335,7 +337,8 @@ int TreeModel::rowCount(const QModelIndex &parent) const {
   // Get the parentID from the SELECT of the id
   std::string sqlQuery = "SELECT COUNT(*) FROM `" + tableName + "`";
   if (parentId != "*") {
-    sqlQuery.append(" WHERE `" + parentColumn + "`='" + parentId + "'");
+    sqlQuery.append(" WHERE `" + columnMap.at("parentId") + "`='" + parentId +
+                    "'");
   }
   sqlQuery.append(";");
 
@@ -359,28 +362,31 @@ int TreeModel::rowCount(const QModelIndex &parent) const {
   }
 
 #if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_ROW_COUNT
-  std::cout << "TreeModel::rowCount rowCountRet: " << rowCountRet << std::endl;
+  std::cout << "SqliteModel::rowCount rowCountRet: " << rowCountRet
+            << std::endl;
 #endif
 
   return rowCountRet;
 }
 
-bool TreeModel::setData(const QModelIndex &index, const QVariant &value,
-                        int role) {
+bool SqliteModel::setData(const QModelIndex &index, const QVariant &value,
+                          int role) {
   if (role) {
     // TODO
   }
   return true;
 }
 
-Qt::DropActions TreeModel::supportedDropActions() const {
+Qt::DropActions SqliteModel::supportedDropActions() const {
   return Qt::CopyAction | Qt::MoveAction;
 }
 
-bool TreeModel::removeRows(int row, int count, const QModelIndex &parent) {
+bool SqliteModel::removeRows(int row, int count, const QModelIndex &parent) {
   // TODO
   return true;
 }
 
 } // namespace widget
 } // namespace bookfiler
+
+#endif

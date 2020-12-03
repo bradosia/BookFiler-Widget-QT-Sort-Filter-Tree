@@ -45,7 +45,6 @@
 
 // Local Project
 #include "TreeItemDelegate.hpp"
-#include "TreeModel.hpp"
 
 /*
  * bookfiler - widget
@@ -56,7 +55,6 @@ namespace widget {
 class TreeView : public QTreeView {
   Q_OBJECT
 private:
-  std::shared_ptr<TreeModel> treeModelPtr;
   std::shared_ptr<TreeItemDelegate> treeItemDelegatePtr;
 
 public:
