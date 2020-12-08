@@ -79,6 +79,10 @@ public:
   int setItemEditorWidget(
       int columnNum,
       std::function<std::shared_ptr<QWidget>()> editorWidgetCreator);
+
+
+  public slots:
+      void expand(const QModelIndex &index);
 };
 
 } // namespace widget

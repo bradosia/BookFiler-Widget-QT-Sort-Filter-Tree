@@ -22,6 +22,7 @@
 #include <QMainWindow>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QPushButton>
 
 // Bookfiler Libraries
 #include <BookFiler-Lib-Sort-Filter-Tree-Widget/Interface.hpp>
@@ -74,7 +75,17 @@ int main(int argc, char *argv[]) {
   // Set up window
   QWidget *centralWidgetPtr = new QWidget();
   QVBoxLayout *layout = new QVBoxLayout;
+  QPushButton *btn = new QPushButton();
+  btn->setText("Sort");
+  QObject::connect(btn, &QPushButton::clicked, [sqlModelPtr, treeViewPtr](bool) {
+      std::vector<std::pair<std::string, std::string>> sortOrder;
+      sortOrder.emplace_back(std::pair<std::string, std::string>("name", "ASC"));
+      sqlModelPtr->setSort(sortOrder);
+      treeViewPtr->update();
+  });
+
   layout->addWidget(treeViewPtr);
+  layout->addWidget(btn);
   centralWidgetPtr->setLayout(layout);
 
   qtMainWindow.setCentralWidget(centralWidgetPtr);
@@ -132,7 +143,7 @@ int populateDatabase(std::shared_ptr<sqlite3> database) {
   /* Randomly generate an SQL statement to generate a tree with randomly
    * generated children, names, and values
    */
-  for (int i = 0; i < 100; i++) {
+  for (int i = 0; i < 1000; i++) {
     std::string parentGuid = guidList[rand() % (guidList.size() - 1)];
     std::string newGuid = gen_random(32);
     insertSql.append("INSERT INTO testTable (guid,parent_guid,name,value) "

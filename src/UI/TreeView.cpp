@@ -20,12 +20,20 @@ namespace widget {
 TreeView::TreeView() { this->setObjectName("BookFiler Tree Widget"); };
 TreeView::~TreeView(){};
 
-int TreeView::update() { return 0; }
+int TreeView::update() {
+    QTreeView::repaint();
+    return 0;
+}
 
 int TreeView::setItemEditorWidget(
     int columnNum,
     std::function<std::shared_ptr<QWidget>()> editorWidgetCreator) {
   return 0;
+}
+
+void TreeView::expand(const QModelIndex &index)
+{
+    QTreeView::expand(index);
 }
 
 } // namespace widget
