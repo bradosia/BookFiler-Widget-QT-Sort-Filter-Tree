@@ -26,8 +26,8 @@ if(WIN32)
 endif()
 #set(CMAKE_CXX_FLAGS "-O3")
 #set(CMAKE_SHARED_LINKER_FLAGS "-static -static-libgcc -static-libstdc++ -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive")
-set(CMAKE_BUILD_TYPE "Release")
-#set(CMAKE_BUILD_TYPE "Debug")
+#set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Debug")
 
 # Automatically compile .ui to .h
 set(CMAKE_AUTOUIC ON)

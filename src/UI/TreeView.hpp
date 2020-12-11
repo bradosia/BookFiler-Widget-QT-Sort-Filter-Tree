@@ -83,6 +83,7 @@ public:
 
   public slots:
       void expand(const QModelIndex &index);
+      void keyPressEvent(QKeyEvent *event);
 };
 
 } // namespace widget

@@ -71,6 +71,7 @@ int main(int argc, char *argv[]) {
   bookfiler::widget::TreeView *treeViewPtr = new bookfiler::widget::TreeView();
   treeViewPtr->setModel(sqlModelPtr);
   treeViewPtr->update();
+  treeViewPtr->setSortingEnabled(true);
 
   // Set up window
   QWidget *centralWidgetPtr = new QWidget();
