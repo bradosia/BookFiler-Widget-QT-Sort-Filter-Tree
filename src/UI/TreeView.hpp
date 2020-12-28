@@ -6,8 +6,8 @@
  * @brief sqlite3 based tree widget.
  */
 
-#ifndef BOOKFILER_WIDGET_SORT_FILTER_TREE_TREE_VIEW_H
-#define BOOKFILER_WIDGET_SORT_FILTER_TREE_TREE_VIEW_H
+#ifndef BOOKFILER_WIDGET_QT_SORT_FILTER_TREE_TREE_VIEW_H
+#define BOOKFILER_WIDGET_QT_SORT_FILTER_TREE_TREE_VIEW_H
 
 // config
 #include "../core/config.hpp"
@@ -31,6 +31,7 @@
  * License: Boost Software License (similar to BSD and MIT)
  */
 #include <boost/signals2.hpp>
+#include <boost/current_function.hpp>
 
 /* sqlite3 3.33.0
  * License: PublicDomain
@@ -90,4 +91,4 @@ public:
 } // namespace bookfiler
 
 #endif
-// end BOOKFILER_WIDGET_SORT_FILTER_TREE_TREE_VIEW_H
+// end BOOKFILER_WIDGET_QT_SORT_FILTER_TREE_TREE_VIEW_H

@@ -29,7 +29,7 @@ set(LIBRARIES
     # sqlite3
     sqlite3
 
-    BookFiler-Lib-Sort-Filter-Tree-Widget-LibShared
+    BookFiler-Widget-QT-Sort-Filter-Tree-LibShared
 )
 
 if(WIN32)

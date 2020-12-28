@@ -22,12 +22,28 @@
 namespace bookfiler {
 namespace widget {
 
-SqliteModel::SqliteModel(std::shared_ptr<sqlite3> database_,
-                         std::string tableName_,
-                         std::map<std::string, std::string> columnMap_,
-                         QObject *parent)
+SqliteModel::SqliteModel(
+    std::shared_ptr<sqlite3> database_, std::string tableName_,
+    std::vector<boost::bimap<std::string, std::string>::value_type> columnMap_,
+    QObject *parent)
     : QAbstractItemModel(parent) {
+  sortOrder =
+      std::make_shared<std::list<std::pair<std::string, std::string>>>();
+  filterList = std::make_shared<
+      std::list<std::tuple<std::string, std::string, std::string>>>();
+  columnMap = std::make_shared<boost::bimap<std::string, std::string>>();
+  columnNumMap = std::make_shared<boost::bimap<int, int>>();
+  columnToNumMap = std::make_shared<boost::bimap<std::string, int>>();
   setData(database_, tableName_, columnMap_);
+  // create root index
+  rootIndex = std::make_shared<SqliteModelIndex>(database, tableName, columnMap,
+                                                 columnNumMap, columnToNumMap);
+  rootIndex->setSortOrder(sortOrder);
+  rootIndex->setFilterList(filterList);
+  rootIndex->setParentId("*");
+
+  // Perform a full fetch for data and cache
+  rootIndex->getDataBackend();
 }
 
 SqliteModel::~SqliteModel() {}
@@ -39,9 +55,10 @@ SqliteModel::~SqliteModel() {}
  *
  */
 
-int SqliteModel::setData(std::shared_ptr<sqlite3> database_,
-                         std::string tableName_,
-                         std::map<std::string, std::string> columnMap_) {
+int SqliteModel::setData(
+    std::shared_ptr<sqlite3> database_, std::string tableName_,
+    std::vector<boost::bimap<std::string, std::string>::value_type>
+        columnMap_) {
   int rc = 0;
 
   // Set sqlite database information
@@ -50,7 +67,8 @@ int SqliteModel::setData(std::shared_ptr<sqlite3> database_,
 
   // Use default column map if none provided
   if (!columnMap_.empty()) {
-    columnMap = columnMap_;
+    columnMap = std::make_shared<boost::bimap<std::string, std::string>>(
+        columnMap_.begin(), columnMap_.end());
   }
 
   /* Get the table headers */
@@ -65,19 +83,26 @@ int SqliteModel::setData(std::shared_ptr<sqlite3> database_,
   int rowCount = 0;
   rc = sqlite3_step(stmt);
   while (rc != SQLITE_DONE && rc != SQLITE_OK) {
-    rowCount++;
     int colCount = sqlite3_column_count(stmt);
     for (int colIndex = 0; colIndex < colCount; colIndex++) {
       int type = sqlite3_column_type(stmt, colIndex);
       const char *columnName = sqlite3_column_name(stmt, colIndex);
-      const unsigned char *valChar = sqlite3_column_text(stmt, colIndex);
-      headerList.push_back(reinterpret_cast<const char *>(valChar));
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_SET_DATA
-      std::cout << "row: " << rowCount << ", col: " << colCount
-                << ", colName: " << columnName << ", valChar: " << valChar
-                << std::endl;
+      const unsigned char *valueUChar = sqlite3_column_text(stmt, colIndex);
+      std::string valueStr =
+          std::string(reinterpret_cast<const char *>(valueUChar));
+      headerList.push_back(reinterpret_cast<const char *>(valueUChar));
+      columnToNumMap->insert({valueStr, rowCount});
+      // use the database column names if no column map provided
+      if (columnMap_.empty()) {
+        columnMap->insert({valueStr, valueStr});
+      }
+#if BOOKFILER_QMODEL_SQLITE_MODEL_setData
+      std::cout << BOOST_CURRENT_FUNCTION << " row: " << rowCount
+                << ", col: " << colCount << ", colName: " << columnName
+                << ", valueUChar: " << valueUChar << std::endl;
 #endif
     }
+    rowCount++;
     rc = sqlite3_step(stmt);
   }
 
@@ -85,16 +110,26 @@ int SqliteModel::setData(std::shared_ptr<sqlite3> database_,
   if (rc != 0) {
     return rc;
   }
+
+  /* Fill out the column num map at the same size as actual columns
+   */
+  for (int i = 0; i < rowCount; i++) {
+    columnNumMap->insert({i, i});
+  }
+
   return 0;
 }
 
 int SqliteModel::setRoot(std::string id) {
-  viewRootId = id;
+  viewRootId = std::make_shared<std::string>(id);
+  rootIndex->setParentId(*viewRootId);
   return 0;
 }
 
-int SqliteModel::setColumnNumMap(std::map<int, int> columnNumMap_) {
-  columnNumMap = columnNumMap_;
+int SqliteModel::setColumnNumMap(
+    std::vector<boost::bimap<int, int>::value_type> columnNumMap_) {
+  columnNumMap = std::make_shared<boost::bimap<int, int>>(columnNumMap_.begin(),
+                                                          columnNumMap_.end());
   return 0;
 }
 
@@ -112,27 +147,38 @@ int SqliteModel::connectUpdateIdHint(
  *
  */
 
-int SqliteModel::columnCount(const QModelIndex &parent) const {
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_COLUMN_COUNT
-  std::cout << "SqliteModel::columnCount row: " << parent.row()
-            << ", col: " << parent.column();
-  if (parent.internalPointer()) {
-    std::string parentId =
-        *static_cast<std::string *>(parent.internalPointer());
-    std::cout << ", parentId: " << parentId;
+int SqliteModel::columnCount(const QModelIndex &index) const {
+#if BOOKFILER_QMODEL_SQLITE_MODEL_COUNT
+  auto startTimePoint = std::chrono::system_clock::now();
+  std::time_t startTime = std::chrono::system_clock::to_time_t(startTimePoint);
+  std::cout << "["
+            << std::put_time(std::localtime(&startTime), "%Y-%m-%d %H:%M:%S %X")
+            << "] ";
+  std::cout << BOOST_CURRENT_FUNCTION << " row: " << index.row()
+            << ", col: " << index.column();
+  if (index.internalPointer()) {
+    SqliteModelIndex *parentIndexPtr =
+        static_cast<SqliteModelIndex *>(index.internalPointer());
+    std::cout << ", parentId: " << parentIndexPtr->getParentId();
   }
   std::cout << std::endl;
 #endif
-  return headerList.size();
+  return columnNumMap->size();
 }
 
 QVariant SqliteModel::data(const QModelIndex &index, int role) const {
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "SqliteModel::data index.row: " << index.row()
-            << ", index.col: " << index.column();
+#if BOOKFILER_QMODEL_SQLITE_MODEL_DATA
+  auto startTimePoint = std::chrono::system_clock::now();
+  std::time_t startTime = std::chrono::system_clock::to_time_t(startTimePoint);
+  std::cout << "["
+            << std::put_time(std::localtime(&startTime), "%Y-%m-%d %H:%M:%S %X")
+            << "] ";
+  std::cout << BOOST_CURRENT_FUNCTION << " index.row: " << index.row()
+            << ", index.col: " << index.column() << ", role: " << role;
   if (index.internalPointer()) {
-    std::string indexId = *static_cast<std::string *>(index.internalPointer());
-    std::cout << ", parentId: " << indexId;
+    SqliteModelIndex *parentIndexPtr =
+        static_cast<SqliteModelIndex *>(index.internalPointer());
+    std::cout << ", parentId: " << parentIndexPtr->getParentId();
   }
   std::cout << std::endl;
 #endif
@@ -140,48 +186,23 @@ QVariant SqliteModel::data(const QModelIndex &index, int role) const {
   if (!index.isValid())
     return QVariant();
 
-  std::string childId = *static_cast<std::string *>(index.internalPointer());
+  SqliteModelIndex *modelIndexPtr =
+      static_cast<SqliteModelIndex *>(index.internalPointer());
 
-  // Get the fieldValue from the SELECT of the id
-  std::string sqlQuery =
-      "SELECT `" + headerList[index.column()].toString().toStdString() + "` FROM `" + tableName
-      + "` WHERE `" + columnMap.at("id") + "`='" + childId + "'";
-  sqlQuery.append(" LIMIT 1;");
+  QVariant value = modelIndexPtr->getDataCell(index.row(), index.column());
 
-  sqlite3_stmt *stmt = nullptr;
-  int rc = sqlite3_prepare_v2(database.get(), sqlQuery.c_str(), -1, &stmt, nullptr);
-  if (rc != SQLITE_OK) {
-      return QModelIndex();
-  }
-
-  std::string *value = nullptr;
-  rc = sqlite3_step(stmt);
-  while (rc != SQLITE_DONE && rc != SQLITE_OK) {
-      int colCount = sqlite3_column_count(stmt);
-      for (int colIndex = 0; colIndex < colCount; colIndex++) {
-          const unsigned char *valChar = sqlite3_column_text(stmt, colIndex);
-          if (valChar) {
-              value = new std::string(reinterpret_cast<const char *>(valChar));
-          }
-      }
-      rc = sqlite3_step(stmt);
-  }
-
-  rc = sqlite3_finalize(stmt);
-  if (rc != 0) {
-      return QVariant();
-  }
-
+#if BOOKFILER_QMODEL_SQLITE_MODEL_DATA
+  std::cout << BOOST_CURRENT_FUNCTION
+            << " value: " << value.toString().toStdString() << std::endl;
+#endif
 
   // Normal data display
   if (role == Qt::DisplayRole) {
-      return value ? QVariant::fromValue<QString>(QString::fromStdString(*value)) : QVariant();
-      //return item->data(index.column());
+    return value;
   }
   // Data displayed in the edit box
   else if (role == Qt::EditRole) {
-     //return item->data(index.column());
-     return value ? QVariant::fromValue<QString>(QString::fromStdString(*value)) : QVariant();
+    return value;
   }
 
   // for all else
@@ -189,12 +210,13 @@ QVariant SqliteModel::data(const QModelIndex &index, int role) const {
 }
 
 Qt::ItemFlags SqliteModel::flags(const QModelIndex &index) const {
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "SqliteModel::flags index.row: " << index.row()
-            << ", index.col: " << index.column();
+#if BOOKFILER_QMODEL_SQLITE_MODEL_FLAGS
+  std::cout << BOOST_CURRENT_FUNCTION << " row: " << index.row()
+            << ", col: " << index.column();
   if (index.internalPointer()) {
-    std::string indexId = *static_cast<std::string *>(index.internalPointer());
-    std::cout << ", indexId: " << indexId;
+    SqliteModelIndex *parentIndexPtr =
+        static_cast<SqliteModelIndex *>(index.internalPointer());
+    std::cout << ", parentId: " << parentIndexPtr->getParentId();
   }
   std::cout << std::endl;
 #endif
@@ -205,195 +227,144 @@ Qt::ItemFlags SqliteModel::flags(const QModelIndex &index) const {
          Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
 }
 
-QVariant SqliteModel::headerData(int section, Qt::Orientation orientation,
+QVariant SqliteModel::headerData(int columnNum, Qt::Orientation orientation,
                                  int role) const {
   if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
-    return headerList.at(section);
+    return headerList.at(columnNum);
   }
 
   return QVariant();
 }
 
-QModelIndex SqliteModel::index(int row, int column,
+QModelIndex SqliteModel::index(int rowNum, int colNum,
                                const QModelIndex &parent) const {
-  int rc = 0;
-  std::string parentId;
-  std::string *childId;
+  SqliteModelIndex *parentIndexPtr = nullptr;
   if (parent.internalPointer()) {
-      parentId = *static_cast<std::string *>(parent.internalPointer());
+    parentIndexPtr = static_cast<SqliteModelIndex *>(parent.internalPointer());
   }
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "SqliteModel::index parent.row: " << parent.row()
+#if BOOKFILER_QMODEL_SQLITE_MODEL_INDEX
+  auto startTimePoint = std::chrono::system_clock::now();
+  std::time_t startTime = std::chrono::system_clock::to_time_t(startTimePoint);
+  std::cout << "["
+            << std::put_time(std::localtime(&startTime), "%Y-%m-%d %H:%M:%S %X")
+            << "] ";
+  std::cout << BOOST_CURRENT_FUNCTION << " parent.row: " << parent.row()
             << ", parent.col: " << parent.column();
-  std::cout << ", row: " << row << ", col: " << column;
-  if (parent.internalPointer()) {
-    std::cout << ", parentId: " << parentId;
+  std::cout << ", row: " << rowNum << ", col: " << colNum;
+  if (parentIndexPtr) {
+    std::cout << ", parentId: " << parentIndexPtr->getParentId();
   }
   std::cout << std::endl;
 #endif
 
-  if (!hasIndex(row, column, parent))
+  if (!hasIndex(rowNum, colNum, parent))
     return QModelIndex();
 
-  if (!parent.isValid())
-    parentId = viewRootId;
-  else
-    parentId = *static_cast<std::string *>(parent.internalPointer());
-
-  // Get the parentID from the SELECT of the id
-  std::string sqlQuery =
-      "SELECT `" + columnMap.at("id") + "` FROM `" + tableName + "`";
-  sqlQuery.append(whereSQLCondition(parentId));
-  sqlQuery.append(sortSQL());
-  sqlQuery.append(" LIMIT " + std::to_string(row) + ",1;");
-
-  sqlite3_stmt *stmt = nullptr;
-  rc = sqlite3_prepare_v2(database.get(), sqlQuery.c_str(), -1, &stmt, nullptr);
-  if (rc != SQLITE_OK) {
-    return QModelIndex();
+  if (!parentIndexPtr) {
+    return createIndex(rowNum, colNum, rootIndex.get());
+    //parentIndexPtr = rootIndex.get();
   }
 
-  rc = sqlite3_step(stmt);
-  while (rc != SQLITE_DONE && rc != SQLITE_OK) {
-    int colCount = sqlite3_column_count(stmt);
-    for (int colIndex = 0; colIndex < colCount; colIndex++) {
-      const unsigned char *valChar = sqlite3_column_text(stmt, colIndex);
-      childId = new std::string(reinterpret_cast<const char *>(valChar));
-    }
-    rc = sqlite3_step(stmt);
-  }
-
-  rc = sqlite3_finalize(stmt);
-  if (rc != 0) {
-    return QModelIndex();
-    ;
-  }
-
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_ROW_COUNT
-  std::cout << "SqliteModel::index childId: " << *childId << std::endl;
+  auto rowIdOpt = parentIndexPtr->getRowId(rowNum);
+  if (rowIdOpt) {
+#if BOOKFILER_QMODEL_SQLITE_MODEL_INDEX
+    std::cout << BOOST_CURRENT_FUNCTION << " rowIdOpt: " << *rowIdOpt
+              << std::endl;
 #endif
+    // Find if index was already cached
+    std::shared_ptr<SqliteModelIndex> childIndexPtr =
+        parentIndexPtr->findIndex(*rowIdOpt);
+    if (childIndexPtr) {
+      return createIndex(rowNum, colNum, childIndexPtr.get());
+    }
 
-  if (childId)
-    return createIndex(row, column, childId);
+    // Create new index
+    childIndexPtr = std::make_shared<SqliteModelIndex>(
+        database, tableName, columnMap, columnNumMap, columnToNumMap);
+
+    /* QAbstractItemModel overrided methods are const
+     * so we can not store indexes in a map in this object
+     * Instead indexes are stored as children
+     */
+    parentIndexPtr->insertIndex(*rowIdOpt, childIndexPtr);
+
+    childIndexPtr->setSortOrder(sortOrder);
+    childIndexPtr->setFilterList(filterList);
+    childIndexPtr->setRowNum(rowNum);
+    childIndexPtr->setColNum(colNum);
+    childIndexPtr->setParentId(*rowIdOpt);
+    childIndexPtr->setParent(parentIndexPtr);
+
+    // Perform a full fetch for data and cache
+    childIndexPtr->getDataBackend();
+
+    return createIndex(rowNum, colNum, childIndexPtr.get());
+  }
   return QModelIndex();
 }
 
 QModelIndex SqliteModel::parent(const QModelIndex &index) const {
-  int rc = 0;
-  std::string *parentId = nullptr;
-  std::string indexId;
-
+  SqliteModelIndex *childIndexPtr;
   if (index.internalPointer()) {
-      indexId = *static_cast<std::string *>(index.internalPointer());
+    childIndexPtr = static_cast<SqliteModelIndex *>(index.internalPointer());
   }
-
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "SqliteModel::parent row: " << index.row()
-            << ", col: " << index.column();
-  if (index.internalPointer()) {
-    std::cout << ", indexId: " << indexId;
+#if BOOKFILER_QMODEL_SQLITE_MODEL_PARENT
+  auto startTimePoint = std::chrono::system_clock::now();
+  std::time_t startTime = std::chrono::system_clock::to_time_t(startTimePoint);
+  std::cout << "["
+            << std::put_time(std::localtime(&startTime), "%Y-%m-%d %H:%M:%S %X")
+            << "] ";
+  std::cout << BOOST_CURRENT_FUNCTION << " parent.row: " << index.row()
+            << ", parent.col: " << index.column();
+  if (childIndexPtr) {
+    std::cout << ", parentId: " << childIndexPtr->getParentId();
   }
   std::cout << std::endl;
 #endif
 
-  if (!index.isValid())
+  // never return a model index corresponding to the root item
+  if (!childIndexPtr)
     return QModelIndex();
 
-  // Get the parentID from the SELECT of the id
-  std::string sqlQuery = "SELECT `" + columnMap.at("parentId") + "` FROM `" +
-                         tableName + "` WHERE `" + columnMap.at("id") + "`='" +
-                         indexId + "';";
-
-  sqlite3_stmt *stmt = nullptr;
-  rc = sqlite3_prepare_v2(database.get(), sqlQuery.c_str(), -1, &stmt, nullptr);
-  if (rc != SQLITE_OK)
+  if (childIndexPtr->getParentId() == "*")
     return QModelIndex();
 
-  rc = sqlite3_step(stmt);
-  while (rc != SQLITE_DONE && rc != SQLITE_OK) {
-    int colCount = sqlite3_column_count(stmt);
-    for (int colIndex = 0; colIndex < colCount; colIndex++) {
-      int type = sqlite3_column_type(stmt, colIndex);
-      if (type == SQLITE_NULL) {
-        break;
-      }
-      const unsigned char *valChar = sqlite3_column_text(stmt, colIndex);
-      parentId = new std::string(reinterpret_cast<const char *>(valChar));
-    }
-    rc = sqlite3_step(stmt);
-  }
-
-  rc = sqlite3_finalize(stmt);
-  if (rc != 0) {
+  SqliteModelIndex *parentIndexPtr = childIndexPtr->getParent();
+  if (!parentIndexPtr) {
     return QModelIndex();
   }
 
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_ROW_COUNT
-  if (parentId) {
-    std::cout << "SqliteModel::parent parentId: " << *parentId << std::endl;
-  }
-#endif
-
-  if (!parentId)
-    return QModelIndex();
-
-  return createIndex(0, 0, parentId);
+  return createIndex(parentIndexPtr->getRowNum(), 0, parentIndexPtr);
 }
 
 int SqliteModel::rowCount(const QModelIndex &parent) const {
-  int rc = 0;
   int rowCountRet = 0;
-  std::string parentId;
-
+  SqliteModelIndex *parentIndexPtr = nullptr;
   if (parent.internalPointer()) {
-      parentId = *static_cast<std::string *>(parent.internalPointer());
+    parentIndexPtr = static_cast<SqliteModelIndex *>(parent.internalPointer());
   }
-
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_DATA
-  std::cout << "SqliteModel::rowCount parent.row: " << parent.row()
+#if BOOKFILER_QMODEL_SQLITE_MODEL_ROW_COUNT
+  auto startTimePoint = std::chrono::system_clock::now();
+  std::time_t startTime = std::chrono::system_clock::to_time_t(startTimePoint);
+  std::cout << "["
+            << std::put_time(std::localtime(&startTime), "%Y-%m-%d %H:%M:%S %X")
+            << "] ";
+  std::cout << BOOST_CURRENT_FUNCTION << " parent.row: " << parent.row()
             << ", parent.col: " << parent.column();
-  if (parent.internalPointer()) {
-    std::cout << ", parentId: " << parentId;
+  if (parentIndexPtr) {
+    std::cout << ", parentId: " << parentIndexPtr->getParentId();
   }
   std::cout << std::endl;
 #endif
 
-  if (!parent.isValid())
-    parentId = viewRootId;
-  else
-    parentId = *static_cast<std::string *>(parent.internalPointer());
-
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_ROW_COUNT
-  std::cout << "SqliteModel::rowCount isValid: "
-            << (parent.isValid() ? "true" : "false")
-            << ", parentId: " << parentId << std::endl;
-#endif
-
-  // Get the parentID from the SELECT of the id
-  std::string sqlQuery = "SELECT COUNT(1) FROM `" + tableName + "`";
-  sqlQuery.append(whereSQLCondition(parentId));
-  sqlQuery.append(";");
-  sqlite3_stmt *stmt = nullptr;
-  rc = sqlite3_prepare_v2(database.get(), sqlQuery.c_str(), -1, &stmt, nullptr);
-  if (rc != SQLITE_OK)
-    return 0;
-
-  rc = sqlite3_step(stmt);
-  while (rc != SQLITE_DONE && rc != SQLITE_OK) {
-    int colCount = sqlite3_column_count(stmt);
-    for (int colIndex = 0; colIndex < colCount; colIndex++) {
-      rowCountRet = sqlite3_column_int(stmt, colIndex);
-    }
-    rc = sqlite3_step(stmt);
+  if (!parentIndexPtr) {
+    parentIndexPtr = rootIndex.get();
   }
 
-  rc = sqlite3_finalize(stmt);
-  if (rc != 0) {
-    return 0;
-  }
+  rowCountRet = parentIndexPtr->rowCountBackend(parent.row());
 
-#if BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_TREE_MODEL_ROW_COUNT
-  std::cout << "SqliteModel::rowCount rowCountRet: " << rowCountRet
+#if BOOKFILER_QMODEL_SQLITE_MODEL_ROW_COUNT
+  std::cout << BOOST_CURRENT_FUNCTION << " rowCountRet: " << rowCountRet
             << std::endl;
 #endif
 
@@ -402,34 +373,19 @@ int SqliteModel::rowCount(const QModelIndex &parent) const {
 
 bool SqliteModel::setData(const QModelIndex &index, const QVariant &value,
                           int role) {
-    if (role == Qt::EditRole) {
-        char *zErrMsg = 0;
-        if (!index.isValid())
-            return false;
+  if (role == Qt::EditRole) {
+    if (!index.isValid())
+      return false;
 
-        std::string childId = *static_cast<std::string *>(index.internalPointer());
+    SqliteModelIndex *modelIndexPtr =
+        static_cast<SqliteModelIndex *>(index.internalPointer());
 
-        // Get the fieldValue from the SELECT of the id
-        std::string updQuery = "UPDATE`" + tableName + "` SET `"
-                               + headerList[index.column()].toString().toStdString() + "` = '" + value.toString().toStdString() + "' WHERE `"
-                               + columnMap.at("id") + "` = '" + childId + "';";
-        int rc = sqlite3_exec(
-            database.get(), updQuery.c_str(),
-            [](void *NotUsed, int argc, char **argv, char **azColName) -> int {
-                int i;
-                for (i = 0; i < argc; i++) {
-                    printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-                }
-                printf("\n");
-                return 0;
-            },
-            0, &zErrMsg);
-        if (rc != 0) {
-            std::cout << zErrMsg << std::endl;
-            return false;
-        }
+    int rc = modelIndexPtr->setDataCell(index.row(), index.column(), value);
+    if (rc != 0) {
+      return false;
     }
-    return true;
+  }
+  return true;
 }
 
 Qt::DropActions SqliteModel::supportedDropActions() const {
@@ -441,82 +397,75 @@ bool SqliteModel::removeRows(int row, int count, const QModelIndex &parent) {
   return true;
 }
 
-int SqliteModel::setSort(std::vector<std::pair<std::string, std::string> > sortOrderList)
-{
-    sortOrder = sortOrderList;
-    return 0;
+int SqliteModel::setSort(
+    std::list<std::pair<std::string, std::string>> sortOrderList) {
+  // Push each sort field to front and remove duplicates
+  for (auto sortField : sortOrderList) {
+    for (std::list<std::pair<std::string, std::string>>::iterator it =
+             sortOrder->begin();
+         it != sortOrder->end(); ++it) {
+      // delete pairs with the same column code name
+      if (it->first == sortField.first) {
+        sortOrder->erase(it);
+      }
+    }
+    sortOrder->push_front(sortField);
+  }
+  return 0;
 }
 
-int SqliteModel::setFilter(std::vector<std::tuple<std::string, std::string, std::string> > filterList)
-{
-    filter = filterList;
-    return 0;
+int SqliteModel::setFilter(
+    std::list<std::tuple<std::string, std::string, std::string>> filterList_) {
+  filterList = std::make_shared<
+      std::list<std::tuple<std::string, std::string, std::string>>>(
+      filterList_);
+  return 0;
 }
 
-std::string SqliteModel::whereSQLCondition(const std::string &parentId) const
-{
-    std::string whereClause;
-    if (parentId == "*") {
-        whereClause.append(" `" + columnMap.at("parentId") + "` IS NULL ");
-    } else {
-        whereClause.append(" `" + columnMap.at("parentId") + "`='" + parentId +
-                        "'");
-    }
+void SqliteModel::sort(int columnActualNum, Qt::SortOrder order) {
+#if BOOKFILER_QMODEL_SQLITE_MODEL_SORT
+  auto startTimePoint = std::chrono::system_clock::now();
+  std::time_t startTime = std::chrono::system_clock::to_time_t(startTimePoint);
+  std::cout << "["
+            << std::put_time(std::localtime(&startTime), "%Y-%m-%d %H:%M:%S %X")
+            << "] ";
+  std::cout << BOOST_CURRENT_FUNCTION << " columnActualNum: " << columnActualNum
+            << ", Qt::SortOrder: " << order << std::endl;
+#endif
 
-    std::string filterStrings;
-    for (auto filterElement: filter) {
-        auto fieldName = std::get<0>(filterElement);
-        auto value = std::get<1>(filterElement);
-        auto condition = std::get<2>(filterElement);
-        std::string filterString;
-        if (condition == "=") {
-            filterString = "`" + fieldName + "` = '" + value + "'";
-        } else if (condition == "match") {
-            filterString = "`" + fieldName + "` like '%" + value + "%'";
-        } else if (condition == "auto") {
-        }
-        filterStrings.append((filterString.empty() ? "" : " AND ") + filterString);
-    }
+  std::pair<std::string, std::string> sortField;
+  // get the default column num from the actual column num
+  auto findIt = columnNumMap->right.find(columnActualNum);
+  if (findIt == columnNumMap->right.end()) {
+    return;
+  }
+  int defaultColumnNum = findIt->second;
+  // get the code column name from the default column num
+  auto findIt2 = columnToNumMap->right.find(defaultColumnNum);
+  if (findIt2 == columnToNumMap->right.end()) {
+    return;
+  }
+  std::string columnCodeName = findIt2->second;
+  sortField.first = columnCodeName;
+  switch (order) {
+  case Qt::SortOrder::AscendingOrder:
+    sortField.second = "ASC";
+    break;
+  case Qt::SortOrder::DescendingOrder:
+    sortField.second = "DESC";
+    break;
+  }
+#if BOOKFILER_QMODEL_SQLITE_MODEL_SORT
+  std::cout << BOOST_CURRENT_FUNCTION << " columnCodeName: " << columnCodeName
+            << ", Order: " << sortField.second << std::endl;
+#endif
+  std::list<std::pair<std::string, std::string>> sortOrderList{sortField};
+  setSort(sortOrderList);
 
-    if (!whereClause.empty()) {
-        if (!filterStrings.empty()) {
-            whereClause = " AND ";
-        }
-    }
-    whereClause += filterStrings;
-    whereClause = whereClause.empty() ? "" : " WHERE " + whereClause;
-    return  whereClause;
-}
+  // Perform a full fetch for data and cache
+  rootIndex->getDataBackend();
 
-std::string SqliteModel::sortSQL() const
-{
-    std::string sortSQLClause;
-    for (auto sortElement: sortOrder) {
-        std::string sortField = "`" + sortElement.first + "` " + sortElement.second;
-        sortSQLClause.append((sortSQLClause.empty() ? "" : " , ") + sortField);
-    }
-
-    sortSQLClause = (sortSQLClause.empty() ? "" : " ORDER BY ") + sortSQLClause;
-    return sortSQLClause;
-}
-
-void SqliteModel::sort(int column, Qt::SortOrder order) {
-    std::cout << column << ": " << order << std::endl;
-    std::pair<std::string, std::string> sortField;
-    sortField.first = headerList[column].toString().toStdString();
-    switch (order) {
-    case Qt::SortOrder::AscendingOrder:
-        sortField.second = "ASC";
-        break;
-    case Qt::SortOrder::DescendingOrder:
-        sortField.second = "DESC";
-        break;
-    }
-    std::cout << sortField.first << ": " << sortField.second << std::endl;
-    std::vector<std::pair<std::string, std::string> > sortOrderList {sortField};
-
-    setSort(sortOrderList);
-    emit layoutChanged();
+  emit layoutChanged();
 }
 
 } // namespace widget

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.4)
 
-set(PROJECT_NAME BookFiler-Lib-Sort-Filter-Tree-Widget)
+set(PROJECT_NAME BookFiler-Widget-QT-Sort-Filter-Tree)
 project(
   ${PROJECT_NAME}
   VERSION 1.0.0
@@ -44,21 +44,16 @@ link_directories()
 
 # Set up source files
 set(SOURCES
-    src/core/TreeModelIndex.cpp
-
     src/UI/TreeView.cpp
     src/UI/TreeItemDelegate.cpp
     src/UI/TreeItemEditor.cpp
 
     src/QModel/SqliteModelIndex.cpp
     src/QModel/SqliteModel.cpp
-    src/QModel/SqliteModelTest.cpp
 )
 
 set(HEADERS
     src/core/config.hpp
-
-    src/core/TreeModelIndex.hpp
 
     src/UI/TreeView.hpp
     src/UI/TreeItemDelegate.hpp
@@ -66,9 +61,8 @@ set(HEADERS
 
     src/QModel/SqliteModelIndex.hpp
     src/QModel/SqliteModel.hpp
-    src/QModel/SqliteModelTest.hpp
 
-    include/BookFiler-Lib-Sort-Filter-Tree-Widget/Interface.hpp
+    include/BookFiler-Widget-QT-Sort-Filter-Tree/Interface.hpp
 )
 
 set(SHARED_COMPILE_DEFINITIONS
@@ -167,7 +161,7 @@ if(BUILD_EXAMPLES)
 if(DEPENDENCY_BOOST_SQLITE)
     add_subdirectory(src_example/example00)
 endif()
-add_subdirectory(src_example/example01)
+# add_subdirectory(src_example/example01)
 endif()
 
 # Post build

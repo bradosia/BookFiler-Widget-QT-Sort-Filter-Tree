@@ -7,20 +7,26 @@
  */
 
 #if DEPENDENCY_SQLITE
-#ifndef BOOKFILER_WIDGET_SQLITE_MODEL_H
-#define BOOKFILER_WIDGET_SQLITE_MODEL_H
+#ifndef BOOKFILER_QMODEL_SQLITE_MODEL_H
+#define BOOKFILER_QMODEL_SQLITE_MODEL_H
 
 // config
 #include "../core/config.hpp"
 
 // C++
+#include <chrono>  // chrono::system_clock
+#include <ctime>   // localtime
+#include <iomanip> // put_time
 #include <iostream>
 #include <memory>
 #include <queue>
+#include <sstream> // stringstream
 
 /* boost 1.72.0
  * License: Boost Software License (similar to BSD and MIT)
  */
+#include <boost/bimap.hpp>
+#include <boost/current_function.hpp>
 #include <boost/signals2.hpp>
 
 /* QT 5.13.2
@@ -50,24 +56,39 @@ class SqliteModel : public QAbstractItemModel {
   Q_OBJECT
 private:
   std::shared_ptr<sqlite3> database;
-  std::string tableName, viewRootId;
-  std::vector<QVariant> headerList;
+  std::string tableName;
+  std::shared_ptr<std::string> viewRootId;
   boost::signals2::signal<void(std::vector<std::string>,
                                std::vector<std::string>,
                                std::vector<std::string>)>
       updateSignal;
-  std::map<std::string, std::string> columnMap;
-  std::map<int, int> columnNumMap{{0, 0}, {1, 1}, {2, 2}, {3, 3},
-                                  {4, 4}, {5, 5}, {6, 6}};
-  std::vector<std::pair<std::string, std::string>> sortOrder;
-  std::vector<std::tuple<std::string, std::string, std::string>> filter;
+  /* map the default column position to the display column name
+   */
+  std::vector<QVariant> headerList;
+  std::shared_ptr<std::list<std::pair<std::string, std::string>>> sortOrder;
+  std::shared_ptr<std::list<std::tuple<std::string, std::string, std::string>>>
+      filterList;
+  std::shared_ptr<SqliteModelIndex> rootIndex;
 
-  std::string whereSQLCondition(const std::string &parentId) const;
-  std::string sortSQL() const;
+  /* map the code column name to the sqlite3 column name
+   */
+  std::shared_ptr<boost::bimap<std::string, std::string>> columnMap;
+  /* map the default column position to the actual column position
+   */
+  std::shared_ptr<boost::bimap<int, int>> columnNumMap;
+  /* map the code column name to the default column position
+   */
+  std::shared_ptr<boost::bimap<std::string, int>> columnToNumMap;
+
+  /* Reverses columnMap, columnNumMap, and columnToNumMap
+   * @return 0 on success, else error code
+   */
+  int reverse();
 
 public:
   SqliteModel(std::shared_ptr<sqlite3> database_, std::string tableName_,
-              std::map<std::string, std::string> columnMap_,
+              std::vector<boost::bimap<std::string, std::string>::value_type>
+                  columnMap_,
               QObject *parent = nullptr);
   ~SqliteModel();
 
@@ -82,7 +103,8 @@ public:
    * @return 0 on success, else error code
    */
   int setData(std::shared_ptr<sqlite3> database, std::string tableName,
-              std::map<std::string, std::string> columnMap_);
+              std::vector<boost::bimap<std::string, std::string>::value_type>
+                  columnMap);
 
   /* Sets the root id for the view.
    * @param id the view root. "*" to view all rows with a NULL parent
@@ -95,7 +117,8 @@ public:
    * @param columnNumMap The column number map
    * @return 0 on success, else error code
    */
-  int setColumnNumMap(std::map<int, int> columnNumMap);
+  int setColumnNumMap(
+      std::vector<boost::bimap<int, int>::value_type> columnNumMap);
 
   /* Connect a function that will be signaled when the database is updated by
    * this widget
@@ -123,7 +146,7 @@ public:
    * @param sortOrderList A list of orders to sort by
    * @return 0 on success, else error code
    */
-  int setSort(std::vector<std::pair<std::string, std::string>> sortOrderList);
+  int setSort(std::list<std::pair<std::string, std::string>> sortOrderList);
 
   /* The vector representation of an SQL "WHERE" clause.
    * For example the initialized object:
@@ -138,8 +161,8 @@ public:
    * @param sortOrderList A list of orders to sort by
    * @return 0 on success, else error code
    */
-  int setFilter(std::vector<std::tuple<std::string, std::string, std::string>>
-                    filterList);
+  int setFilter(
+      std::list<std::tuple<std::string, std::string, std::string>> filterList);
 
   /* Essential QAbstractItemModel methods
    *
@@ -174,5 +197,5 @@ public:
 } // namespace widget
 } // namespace bookfiler
 
-#endif // BOOKFILER_WIDGET_SQLITE_MODEL_H
+#endif // BOOKFILER_QMODEL_SQLITE_MODEL
 #endif

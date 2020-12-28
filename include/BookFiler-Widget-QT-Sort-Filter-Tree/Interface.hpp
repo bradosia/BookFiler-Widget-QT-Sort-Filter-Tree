@@ -6,13 +6,12 @@
  * @brief Super fast tree sorting and filtering tree widget.
  */
 
-#ifndef BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_INTERFACE_H
-#define BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_INTERFACE_H
+#ifndef BOOKFILER_WIDGET_QT_SORT_FILTER_TREE_INTERFACE_H
+#define BOOKFILER_WIDGET_QT_SORT_FILTER_TREE_INTERFACE_H
 
 // local project
 #include "../src/UI/TreeView.hpp"
 #include "../src/QModel/SqliteModel.hpp"
-#include "../src/QModel/SqliteModelTest.hpp"
 
 /*
  * bookfiler - widget
@@ -25,4 +24,4 @@ namespace widget {
 } // namespace bookfiler
 
 #endif
-// end BOOKFILER_LIBRARY_SORT_FILTER_TREE_WIDGET_INTERFACE_H
+// end BOOKFILER_WIDGET_QT_SORT_FILTER_TREE_INTERFACE_H

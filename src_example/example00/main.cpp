@@ -20,15 +20,15 @@
  */
 #include <QApplication>
 #include <QMainWindow>
+#include <QPushButton>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <QPushButton>
 
 // Bookfiler Libraries
-#include <BookFiler-Lib-Sort-Filter-Tree-Widget/Interface.hpp>
+#include <BookFiler-Widget-QT-Sort-Filter-Tree/Interface.hpp>
 
 std::string gen_random(const int len);
-int populateDatabase(std::shared_ptr<sqlite3> database);
+int populateDatabase(std::shared_ptr<sqlite3> database, int entriesNum);
 
 std::string testName = "Sort Filter Tree Widget Example 00";
 
@@ -50,21 +50,19 @@ int main(int argc, char *argv[]) {
   std::shared_ptr<sqlite3> database(nullptr);
   database.reset(dbPtr, sqlite3_close);
 
-  rc = populateDatabase(database);
+  rc = populateDatabase(database, 1000);
   if (rc < 0) {
     std::cout << "error" << std::endl;
     return rc;
   }
 
-  // columnMap
-  std::map<std::string, std::string> columnMap{{"id", "guid"},
-                                               {"parentId", "parent_guid"},
-                                               {"name", "name"},
-                                               {"value", "value"}};
-
   // Setup Model
   bookfiler::widget::SqliteModel *sqlModelPtr =
-      new bookfiler::widget::SqliteModel(database, "testTable", columnMap);
+      new bookfiler::widget::SqliteModel(database, "testTable",
+                                         {{"id", "guid"},
+                                          {"parentId", "parent_guid"},
+                                          {"name", "name"},
+                                          {"value", "value"}});
   sqlModelPtr->setRoot("*");
 
   // Setup View
@@ -72,18 +70,21 @@ int main(int argc, char *argv[]) {
   treeViewPtr->setModel(sqlModelPtr);
   treeViewPtr->update();
   treeViewPtr->setSortingEnabled(true);
+  treeViewPtr->setUniformRowHeights(true);
 
   // Set up window
   QWidget *centralWidgetPtr = new QWidget();
   QVBoxLayout *layout = new QVBoxLayout;
   QPushButton *btn = new QPushButton();
   btn->setText("Sort");
-  QObject::connect(btn, &QPushButton::clicked, [sqlModelPtr, treeViewPtr](bool) {
-      std::vector<std::pair<std::string, std::string>> sortOrder;
-      sortOrder.emplace_back(std::pair<std::string, std::string>("name", "ASC"));
-      sqlModelPtr->setSort(sortOrder);
-      treeViewPtr->update();
-  });
+  QObject::connect(btn, &QPushButton::clicked,
+                   [sqlModelPtr, treeViewPtr](bool) {
+                     std::list<std::pair<std::string, std::string>> sortOrder;
+                     sortOrder.emplace_back(
+                         std::pair<std::string, std::string>("name", "ASC"));
+                     sqlModelPtr->setSort(sortOrder);
+                     treeViewPtr->update();
+                   });
 
   layout->addWidget(treeViewPtr);
   layout->addWidget(btn);
@@ -110,7 +111,7 @@ std::string gen_random(const int len) {
   return tmp_s;
 }
 
-int populateDatabase(std::shared_ptr<sqlite3> database) {
+int populateDatabase(std::shared_ptr<sqlite3> database, int entriesNum) {
   char *zErrMsg = 0;
   int rc = 0;
   /* CREATE TABLE - Create SQL statement */
@@ -138,13 +139,14 @@ int populateDatabase(std::shared_ptr<sqlite3> database) {
 
   /* INSERT TEST DATA - Create SQL statement */
   // keep track of guid so that new children can randomly be added
-  std::vector<std::string> guidList{"*", "*"};
+  std::vector<std::string> guidList{"*", "*", "*", "*", "*", "*", "*", "*",
+                                    "*", "*", "*", "*", "*", "*", "*", "*"};
   std::string insertSql;
   srand((unsigned)time(NULL) * getpid());
   /* Randomly generate an SQL statement to generate a tree with randomly
    * generated children, names, and values
    */
-  for (int i = 0; i < 1000; i++) {
+  for (int i = 0; i < entriesNum; i++) {
     std::string parentGuid = guidList[rand() % (guidList.size() - 1)];
     std::string newGuid = gen_random(32);
     insertSql.append("INSERT INTO testTable (guid,parent_guid,name,value) "
