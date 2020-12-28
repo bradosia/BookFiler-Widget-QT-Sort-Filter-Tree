@@ -14,26 +14,28 @@ database.reset(dbPtr, sqlite3_close);
 
 Create the tree widget and set the database data
 ```cpp
-  // Create View and Model
-  std::shared_ptr<bookfiler::widget::TreeView> treeViewPtr =
-      std::make_shared<bookfiler::widget::TreeView>();
-  std::shared_ptr<bookfiler::widget::TreeModel> treeModelPtr =
-      std::make_shared<bookfiler::widget::TreeModel>();
-  qtMainWindow.setCentralWidget(treeViewPtr.get());
-  qtMainWindow.show();
-
   // Setup Model
-  treeModelPtr->setData(database, "testTable", "guid", "parent_guid");
+  bookfiler::widget::SqliteModel *sqlModelPtr =
+      new bookfiler::widget::SqliteModel(database, "testTable",
+                                         {{"id", "guid"},
+                                          {"parentId", "parent_guid"},
+                                          {"name", "name"},
+                                          {"value", "value"}});
   treeModelPtr->setRoot("*");
 
   // Setup View
-  treeViewPtr->setModel(treeModelPtr.get());
+  bookfiler::widget::TreeView *treeViewPtr = new bookfiler::widget::TreeView();
+  treeViewPtr->setModel(sqlModelPtr);
   treeViewPtr->update();
+  
+  // Create View and Model
+  qtMainWindow.setCentralWidget(treeViewPtr);
+  qtMainWindow.show();
 ```
 
 ## Table format
 
-This widget will work with any sqlite3 table as long as there is a `guid` and `parent_guid` column. The  `guid` is a unique id for the row and the `parent_guid` will be the parent id that the row will be a child of.
+This widget will work with any sqlite3 table as long as there is a `id` and `parentId` column. The `id` is a unique id for the row and the `parentId` will be the parent id that the row will be a child of.
 
 ## Example
 
