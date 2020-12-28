@@ -15,13 +15,26 @@ The reason `sqlite3` is used and not `QSqlDatabase` is because other modules thi
 
 ## How to I start implementing the `SqliteModel` component?
 
-The header file written for the `SqliteModel` documents how the methods should work: [/src/QModel/SqliteModel.hpp](/src/QModel/SqliteModel.hpp)
+* The header file written for the `SqliteModel`: [/src/QModel/SqliteModel.hpp](/src/QModel/SqliteModel.hpp)
+* The header file written for the `SqliteModelIndex`: [/src/QModel/SqliteModelIndex.hpp](/src/QModel/SqliteModelIndex.hpp)
 
-There is already a partial implementation for the `SqliteModel` to give an example of how the column names are pulled out of a `sqlite3` database table. Database query results need to somehow be cached in the model. One design idea may be to cache queries in a custom table index that will be used with the `QModelIndex`. A mostly empty file for this is at [/src/QModel/SqliteModelIndex.hpp](/src/QModel/SqliteModelIndex.hpp).
+`SqliteModel` is mostly implemented. The model indexes cells with a common `parentId` with a `SqliteModelIndex`. `SqliteModelIndex` provides caching for data retrieved from the sqlite3 database.
 
-## Sorting and Filtering Implementation
+Needed fixes and changes:
+* There is an issue with indexes where the children data won't show.
+* Index cached data that is rarely used needs to be freed up
 
-Most of the time, in memory `sqlite3` databases will be used so using sql queries to refetch the `sqlite3` database table should be quick. Similar to `QSqlTableModel`, the `SqliteModel` also has `setSort` and `setFilter` methods, but the usage is different. See the header file [/src/QModel/SqliteModel.hpp](/src/QModel/SqliteModel.hpp) for my notes on these methods.
+## Sorting Implementation
+
+The user should be able to toggle the sort direction, by clicking on the column headers. Sorting is done without a proxy, so the cache must be refetched with the new order.
+
+See `sort` and `setSort` methods in the header file [/src/QModel/SqliteModel.hpp](/src/QModel/SqliteModel.hpp) for my notes.
+
+## Filtering Implementation
+
+There must be a input field to filter columns. It will look like this:
+
+![Tree View Design](/reference/tree-view-design-2.png?raw=true)
 
 ## How is the tree represented in the `sqlite3` table?
 
@@ -48,13 +61,12 @@ The header file written for the `TreeView` documents how the methods should work
 
 # Cell selection
 
-The user should be able to select cells by clicking on them. They are able to select many cells by holding alt or shift while selecting. When copying and pasting a selection to a text pad, it should paste the tab delimited values of the copied cells.
+The user should be able to select cells by clicking on them. They are able to select many cells by holding alt or shift while selecting. When copying and pasting a selection to a text pad, it should paste the tab delimited values of the copied cells. The selection should be able to be pasted into an excel sheet and retain the cell order.
 
 # Usage Instructions
 
-See the two examples. Example00 shows how the sqlite3 `QAbstractItemModel` is created and used. The sqlite3 `QAbstractItemModel` has not been implemented. Example01 was created to test the widget without the sqlite3 `QAbstractItemModel`. The sqlite3 `QAbstractItemModel` is similar to `QSqlTableModel`.
+Example00 shows how the sqlite3 `QAbstractItemModel` is created and used. 
 * [/src_example/example00/main.cpp](/src_example/example00/main.cpp)
-* [/src_example/example01/main.cpp](/src_example/example01/main.cpp)
 
 # Libraries, Compiler, and compatability
 
@@ -80,8 +92,10 @@ Separate all graphical GUI code into the `/src/UI/` directory. Anything with `QT
 ## Deliverables
 
 * Clean and commented code that follows the general design already provided and discussed in the readme.
-* Make the example that tests the widget work [/src_example/example00/main.cpp](/src_example/example00/main.cpp).
-* Should be able to click the header column titles to re-order
-* transaction cells are selectable and copyable as tab separated values in the clipboard.
+* Make the example that tests the widget works [/src_example/example00/main.cpp](/src_example/example00/main.cpp).
+* Make sure you don't break existing functionality
+* Fix the issue with indexes where the children data won't show.
+* Make it so index cached data that is rarely used is freed up
+* Add in user input filter boxes under the column headers
 * Double clicking on a field will make it editable
 
